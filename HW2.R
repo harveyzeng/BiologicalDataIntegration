@@ -1,3 +1,5 @@
+rm(list = ls())
+
 library(reshape2)
 library(missForest)
 library(ggplot2)
@@ -9,7 +11,8 @@ data = list()
 ndata = list()
 
 for(i in c(1,5,10,15,20)){
-  data[[length(data) + 1]] <- read.table(paste("/Users/andyisman/Documents//BioInfo//lymphoma//","m_",i,"_1.txt", sep=""), sep='\t')
+  tmp <- read.table(paste("/Users/andyisman/Documents//BioInfo//lymphoma//","m_",i,"_1.txt", sep=""), sep='\t')
+  data[[length(data) + 1]] <- matrix(as.numeric(unlist(tmp)), nr=nrow(tmp))
   ndata[[length(ndata) + 1]] <- is.na(data[[length(data)]])
 }
 
