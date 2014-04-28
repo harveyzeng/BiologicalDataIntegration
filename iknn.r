@@ -1,3 +1,6 @@
+require(snow)
+
+c <- makeCluster(4, type="MPI")
 iknn <- function(xmiss, Niter, K) {
   
   rowMeanSubstitution <- function(xmiss) {
@@ -10,40 +13,35 @@ iknn <- function(xmiss, Niter, K) {
     return(E)
   }
   
-  Eold <- rowMeanSubstitution(xmiss);
+  xcomplete <- rowMeanSubstitution(xmiss);
   
   miss.gene <- is.na(xmiss)
   miss.row <- which(rowSums(miss.gene)!=0)
   miss.exp <- lapply(miss.row, function(i) which(is.na(xmiss[i, ])))
- 
+  xincomplete <- xmiss[miss.row, ]
+  
   for(h in 1:Niter) {
-    xcomplete <- Eold
     #for each target gene
-    for(j in 1:length(miss.row)){
-      exp <- miss.exp[[j]]
-      gene <- xmiss[miss.row[j], -exp] #target gene
-      cand_x <- xcomplete[-miss.row[j], -exp] #candidate matrix
+    impute <- function(row) {
+      row.miss <- is.na(row)
+      row.exp <- which(row.miss)
+      gene <- row[-row.exp]
+      cand_x <- xcomplete[, -row.exp]
       
       d <- sqrt(rowSums((cand_x - matrix(gene, nc=length(gene), nr=nrow(cand_x), byrow=T))^2))
-      d.idx <- order(d)[1:K]
-      d.sel <- d[d.idx]
+      id.idx <- order(d)[2:(K+1)]
+      id.sel <- d[id.idx]
       
-      d.originId <- c(1:nrow(xcomplete))[-miss.row[j]] 
-      d.originId <- d.originId[d.idx]
-      y <- xcomplete[d.originId, , drop=F]
+      const <- sum(1/id.sel)
+      w <- 1/(const*id.sel)
       
-      const <- sum(1/d.sel)
-      w <- 1/(const*d.sel)
-      
-      
-      Eold[miss.row[j], exp] <- w%*%y[, exp, drop=F] 
+      row[row.exp] <- w %*% xcomplete[id.idx, row.exp, drop=F]
+      return (row)
     }
+    xcomplete[miss.row, ] <- t(parApply(c, xincomplete, 1, impute))
   }
   
-  
-  
-  
- return(Eold) 
+ return(xcomplete) 
 }
 
 nrmse <- function(missing, guess, answer) { 
@@ -53,4 +51,7 @@ nrmse <- function(missing, guess, answer) {
 answer = as.matrix(read.table("/Users/andyisman/Documents/BioInfo/lymphoma/ans.txt", sep="\t"))
 missing <- as.matrix(read.table("/Users/andyisman/Documents/BioInfo/lymphoma/m_5_1.txt", sep=""), sep="\t")
 
-cat(nrmse(missing, iknn(missing, 5, 15), answer),"\n")
+ptm <- proc.time()
+cat(nrmse(missing, iknn(missing, 10, 4), answer),"\n", proc.time() - ptm, "\n")
+
+stopCluster(c)
