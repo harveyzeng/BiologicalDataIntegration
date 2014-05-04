@@ -1,25 +1,3 @@
-rm(list = ls())
-ptm<-proc.time()
-## library ##
-library(pdist)
-#library(ForImp)
-library(imputation)
-library(reshape2)
-library(ggplot2)
-library(grid)
-library(scales)
-library(samr)
-
-processFile <- function(filename){ as.matrix(read.table(filename,header=F,sep='\t')) }
-nrmse <- function(a, b){ sqrt(mean((b-a)**2)/var(a)) }
-
-opt <- list(
-  M = c(1,5,10,15,20),
-  Method = c("zero", "rowaverage", "iknn_cor", "sknn_cor", "knn_cor", "LSimpute"),
-  outFile = format(Sys.time(), "%Y_%m_%d_%H_%M"),
-  K = 15	
-)
-
 zero <- function(xmiss){
   xmiss[is.na(xmiss)] <- 0
   xmiss
@@ -125,7 +103,7 @@ knn <- function(xmiss, K=15, sim.method="euclidean"){
   miss.row <- which(rowSums(miss.gene) != 0)
   xcomplete <- xmiss[-miss.row, ]
   xincomplete <- xmiss[miss.row, ]
-  
+ 
   xmiss[miss.row, ] <- t(apply(xincomplete, 1, function(row){
     row.miss <- is.na(row)
     row.exp <- which(row.miss)
@@ -219,119 +197,3 @@ iknn <- function(xmiss, K=15, sim.method="euclidean", Niter=3){
   }
   return(xcomplete) 
 }
-
-
-# algorithm list
-methodList <- list(
-  zero = function(m){
-    zero(m)
-  },
-  rowaverage = function(m){
-   rowaverage(m)
-  },
-  knn_eu = function(m){
-    knn(m, opt$K, "euclidean")
-  },
-  knn_cor = function(m){
-    knn(m, opt$K, "pearson")
-  },
-  knn_angle = function(m){
-    KNN(m ,opt$K, "consine")
-  },
-  sknn_cor = function(m){
-    sknn(m, opt$K, "pearson")
-  },
-  iknn_cor = function(m){
-    iknn(m, opt$K, "pearson", 2)
-  },
-  LSimpute = function(m){
-    LS(m, opt$K, "pearson")
-  },
-  LLSimpute = function(m){
-    LLS(m, opt$K, "euclidean")
-  }
-)
-# for cpp
-cpp <- function(a, b){
-  c <- matrix(0,nrow=10,ncol=10)
-  for(i in seq(1:length(a))) c[a[i], b[i]] <- c[a[i], b[i]] + 1
-  sum(apply(c, 1, max))/length(a)
-}
-
-# for BLCI
-findsig <- function(x, genenames){
-  x.d<-list(x=x,eigengene.number=10,geneid=genenames,genenames=genenames)
-  x.samr<-samr(x.d,resp.type="Pattern discovery",nperms=100)
-  x.delta<-samr.compute.delta.table(x.samr)
-  x.siggenes.table<-samr.compute.siggenes.table(x.samr,del=0,x.d,x.delta,all.genes=T)
-  x.totalgenes<-rbind(x.siggenes.table$genes.lo,x.siggenes.table$genes.up)
-  x.totalgenes[as.numeric(x.totalgenes[,7])<10,2]
-}
-blci <- function(cd, id, total){
-  cdc <- setdiff(total, cd)
-  idc <- setdiff(total, id)
-  length(intersect(cd,id))/length(cd)+length(intersect(cdc,idc))/length(cdc)-1
-}
-#plotting
-myplot <- function(data, name){
-  melt <- melt(data, varnames=c('M','Method'), value.name='NRMSE')
-  p1 <- ggplot(melt, aes(x=M,y=NRMSE,colour=Method)) + 
-    geom_line(aes(group=Method),size=1.5) + 
-    geom_point(aes(shape=Method),size=7) +
-    xlab("Missing Rate (%)") +
-    ylab(name) +
-    theme(axis.text=element_text(size=26),
-          axis.title=element_text(size=30),
-          legend.title=element_text(size=28),
-          legend.text=element_text(size=26),
-          legend.key.size=unit(1,"cm"),
-          legend.background=element_rect(fill=alpha("gray",0.5)),
-          legend.margin=unit(2.5,"cm"),
-          legend.position=c(.9,.1))
-  
-  png(filename=paste("/Users/andyisman/Documents/BioInfo/lymphoma/",opt$outFile,'_',name,'.png',sep=""), width=700, height=700, bg='white')
-  print(p1)
-  dev.off()
-  
-}
-
-# main
-# create empty table
-resTable.nrmse <- matrix(0, nrow = length(opt$M), ncol = length(opt$Method), byrow = F, dimname=list(opt$M, opt$Method))
-resTable.blci <- resTable.nrmse
-resTable.cpp <- resTable.nrmse
-resTable.time <- resTable.nrmse
-# read ans and calculate ans kmeans and siggene
-ans <- processFile('/Users/andyisman/Documents/BioInfo/lymphoma/ans.txt')
-totalGene <- as.character(1:nrow(ans))
-ans.cluster <- kmeans(ans, 10)$cluster
-ans.sig <- findsig(ans, totalGene)
-# read incomplete and imputing
-for ( mis in opt$M ) { 
-  input <- processFile(paste('/Users/andyisman/Documents/BioInfo/lymphoma/m_', mis, '_1.txt', sep=''))
-  ans_v <- ans[is.na(input)]
-  for( met in opt$Method ) {
-    cat(met,"\n")
-    ptm <- proc.time()
-    output <- methodList[[met]](input)
-    resTable.time[toString(mis), met] <- (proc.time() - ptm)[3]
-    output.cluster <- kmeans(output, 10)$cluster
-    resTable.cpp[toString(mis), met] <- cpp(ans.cluster, output.cluster)
-    output.sig <- findsig(output, totalGene)
-    resTable.blci[toString(mis), met] <- blci(ans.sig, output.sig, totalGene)
-    output_v <- output[is.na(input)]
-    resTable.nrmse[toString(mis), met] <- nrmse(ans_v, output_v)
-  }
-}
-
-
-# plot region
-stopCluster(c1)
-myplot(resTable.nrmse,"NRMSE")
-#myplot(resTable.blci,"BLCI")
-#myplot(resTable.cpp,"CPP")
-myplot(resTable.time, "TIME")
-running.time<-proc.time()-ptm
-print(running.time)
-
-# vi:nu:nowrap:ts=4:st=4

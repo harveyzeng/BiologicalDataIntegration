@@ -1,6 +1,4 @@
-require(snow)
 
-c <- makeCluster(4, type="MPI")
 iknn <- function(xmiss, Niter, K) {
   
   rowMeanSubstitution <- function(xmiss) {
@@ -38,7 +36,7 @@ iknn <- function(xmiss, Niter, K) {
       row[row.exp] <- w %*% xcomplete[id.idx, row.exp, drop=F]
       return (row)
     }
-    xcomplete[miss.row, ] <- t(parApply(c, xincomplete, 1, impute))
+    xcomplete[miss.row, ] <- t(apply(xincomplete, 1, impute))
   }
   
  return(xcomplete) 
@@ -52,6 +50,5 @@ answer = as.matrix(read.table("/Users/andyisman/Documents/BioInfo/lymphoma/ans.t
 missing <- as.matrix(read.table("/Users/andyisman/Documents/BioInfo/lymphoma/m_5_1.txt", sep=""), sep="\t")
 
 ptm <- proc.time()
-cat(nrmse(missing, iknn(missing, 10, 4), answer),"\n", proc.time() - ptm, "\n")
+cat(nrmse(missing, iknn(missing, 2, 15), answer),"\n", proc.time() - ptm, "\n")
 
-stopCluster(c)
