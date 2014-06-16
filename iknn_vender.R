@@ -44,7 +44,14 @@ iknn = function(xmiss, Niter, K=NULL, e=1e-3) {
   # 
   # LPB Jan 2005
   
-  
+  similarityCal<-function(vec, mat, method="EuDist"){
+    methods<-c("EuDist","cor","Angle")
+    switch(match.arg(method,methods),
+           EuDist=1/sqrt(rowSums((mat-matrix(vec,nc=length(vec),nr=nrow(mat),byrow=TRUE))^2)),
+           cor=apply(mat,1,function(i) abs(cor(i,vec,use="everything",method="pearson"))),
+           Angle=apply(mat,1,function(i) abs(sum(i * vec)/sqrt(sum(i^2)*sum(vec^2))))
+    )
+  }
   # 1) Impute missing values by row average:
   Eold <- rowMeanSubstitution(xmiss) 
   
@@ -82,19 +89,19 @@ iknn = function(xmiss, Niter, K=NULL, e=1e-3) {
     cand_x <- xcomplete[-miss_gene[j], -exp]
     # ... compute the Euclidean distance between each candidate gene and
     # the target gene j:
-    d <- sqrt(rowSums((cand_x - matrix(gene, ncol=length(gene),nrow=nrow(cand_x), byrow=TRUE))^2))
+    #d <- sqrt(rowSums((cand_x - matrix(gene, ncol=length(gene),nrow=nrow(cand_x), byrow=TRUE))^2))
     
-    
+    d <- similarityCal(gene, cand_x, "cor")
     # determine the candidate genes corresponding to the Kopt "smallest"
     # distances:
-    ds <- d[order(d)[1:Kopt]]
-    idx <- order(d)[1:Kopt]
+    ds <- d[order(d, decreasing=T)[1:Kopt]]
+    idx <- order(d, decreasing=T)[1:Kopt]
     idx_gene <- c(1:nrow(xmiss))[-miss_gene[j]]
     idx_gene <- idx_gene[idx] # k similar genes
     y <- xcomplete[idx_gene,, drop=FALSE] 
     
-    const <- sum(1/ds) # normalising weight constant 
-    w <- 1/(const*ds) #weights for each gene
+    const <- 1/sum(ds) # normalising weight constant 
+    w <- const * ds #weights for each gene
     
     E[miss_gene[j], exp] <- w%*%y[, exp, drop=FALSE] #weighted average of the k-nearest neighbors
   }
@@ -122,18 +129,18 @@ iknn = function(xmiss, Niter, K=NULL, e=1e-3) {
       
       cand_x <- xcomplete[-miss_gene[j], -exp]
       
-      d <- sqrt(rowSums((cand_x - matrix(gene, ncol=length(gene),nrow=nrow(cand_x), byrow=TRUE))^2))
-      
+      #d <- sqrt(rowSums((cand_x - matrix(gene, ncol=length(gene),nrow=nrow(cand_x), byrow=TRUE))^2))
+      d <- similarityCal(gene, cand_x, "cor")
       # determine the candidate genes corresponding to the Kopt "smallest"
       # distances:
-      ds <- d[order(d)[1:Kopt]]
-      idx <- order(d)[1:Kopt]
+      ds <- d[order(d, decreasing=T)[1:Kopt]]
+      idx <- order(d, decreasing=T)[1:Kopt]
       idx_gene <- c(1:nrow(xmiss))[-miss_gene[j]]
       idx_gene <- idx_gene[idx] # k similar genes
       y <- xcomplete[idx_gene,, drop=FALSE] 
       
-      const <- sum(1/ds) # normalising weight constant 
-      w <- 1/(const*ds) #weights for each gene
+      const <- 1/sum(ds) # normalising weight constant 
+      w <- const*ds #weights for each gene
       
       E[miss_gene[j], exp] <- w%*%y[, exp, drop=FALSE] #weighted average of the k-nearest neighbors
     }

@@ -32,7 +32,7 @@ LLS <- function(xmiss, K=15, sim.method="EuDist"){
     row.miss <- which(is.na(row))
     sim <- similarityCal(row[-row.miss], x.complete[, -row.miss], sim.method)
     sim.id <- order(sim, decreasing=T)[1:K]
-    row[row.miss] <- ans<-t(x.complete[sim.id, row.miss, drop=FALSE]) %*% ginv(t(x.complete[sim.id, -row.miss, drop=FALSE])) %*%row[-row.miss, drop=FALSE]
+    row[row.miss] <- t(x.complete[sim.id, row.miss, drop=FALSE]) %*% ginv(t(x.complete[sim.id, -row.miss, drop=FALSE])) %*%row[-row.miss, drop=FALSE]
     return(row)
   }))
   
@@ -155,8 +155,7 @@ sknn <- function(xmiss, K=15, sim.method="EuDist"){
   return (xmiss)
 }
 
-iknn <- function(xmiss, K=15, sim.method="EuDist", Niter=2){
-  
+iknn <- function(xmiss, K=15, sim.method="EuDist", Niter=3){
   similarityCal<-function(vec, mat, method="EuDist"){
     methods<-c("EuDist","cor","Angle")
     switch(match.arg(method,methods),
@@ -178,27 +177,22 @@ iknn <- function(xmiss, K=15, sim.method="EuDist", Niter=2){
   
   xcomplete <- rowMeanSubstitution(xmiss);
   
-  miss.idx <- is.na(xmiss)
-  miss.row <- which(rowSums(miss.idx) != 0)
-  rowNum <- nrow(xmiss)
-  x.miss<-(cbind(1:rowNum, xmiss))
-  x.miss <- x.miss[miss.row, ]
-  for(i in 1:Niter){
-    xcomplete[miss.row, ] <- t(apply(x.miss, 1, function(row){
-      row.idx <- row[1]
-      row.origin <- row[-1]
-      origin.miss <- which(is.na(row.origin))
-      x.cand <- xcomplete[-row.idx, ]
-      d <- similarityCal(xcomplete[row.idx, ], x.cand, sim.method)
-      d.idx <- order(d, decreasing=T)[1:K]
-      d.sel <- d[d.idx]
-      const <- sum(d.sel)
-      w <- 1/const*d.sel
-      w <- matrix(w, nc=length(w), nr=1)
-      row.origin[origin.miss] <- w%*%x.cand[d.idx, origin.miss, drop=F]
-      
-      return (row.origin)
+  miss.gene <- is.na(xmiss)
+  miss.row <- which(rowSums(miss.gene)!=0)
+  miss.exp <- lapply(miss.row, function(i) which(is.na(xmiss[i, ])))
+  
+  for(h in 1:Niter) {
+    xcomplete[miss.row, ] <- t(apply(xmiss[miss.row, ], 1, function(row){
+      row.miss <- is.na(row)
+      row.exp <- which(row.miss)
+      d <- similarityCal(row[-row.exp], xcomplete[, -row.exp, drop=F], sim.method)
+      id.idx <- order(d, decreasing=T)[2:(K+1)]
+      id.sel <- d[id.idx]
+      const <- 1/sum(id.sel)
+      w <- const * id.sel
+      row[row.exp] <- w %*% xcomplete[id.idx, row.exp, drop=F]
+      return (row)
     }))
   }
-  return(xcomplete)
+  return(xcomplete) 
 }
