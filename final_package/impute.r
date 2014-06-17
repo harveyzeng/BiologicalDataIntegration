@@ -1,7 +1,7 @@
 #-----required package-----
 
 require(MASS)
-
+e<-10^-6
 #-----caculate distance 
 
 similarityCal<-function(vec, mat, method="EuDist"){
@@ -188,7 +188,7 @@ LLS <- function(xmiss, K=15, sim.method="EuDist"){
     row.miss <- which(is.na(row))
     sim <- similarityCal(row[-row.miss], x.complete[, -row.miss], sim.method)
     sim.id <- order(sim, decreasing=T)[1:K]
-    row[row.miss] <- ans<-t(x.complete[sim.id, row.miss, drop=FALSE]) %*% ginv(t(x.complete[sim.id, -row.miss, drop=FALSE])) %*%row[-row.miss, drop=FALSE]
+    row[row.miss] <-t(x.complete[sim.id, row.miss, drop=FALSE]) %*% ginv(t(x.complete[sim.id, -row.miss, drop=FALSE])) %*%row[-row.miss, drop=FALSE]
     return(row)
   }))
   
@@ -214,7 +214,7 @@ SLLS <- function(xmiss, K=15, sim.method="EuDist"){
     sim <- similarityCal(row[-row.miss], x.complete[, -row.miss], sim.method)
     sim.id <- order(sim, decreasing=T)[1:K]
     row[row.miss] <- t(x.complete[sim.id, row.miss, drop=FALSE]) %*% ginv(t(x.complete[sim.id, -row.miss, drop=FALSE])) %*%row[-row.miss, drop=FALSE]
-    if(length(row.miss) <= therhold){
+    if(length(row.miss) < therhold){
       x.complete <<- rbind(x.complete, row)
     }
     return(row)
@@ -237,7 +237,7 @@ ILLS <- function(xmiss, K=15, sim.method="EuDist", Niter=2){
   for(h in 1:Niter) {
     xcomplete[miss.row, ] <- t(apply(xmiss[miss.row, ], 1, function(row){
       row.miss <- which(is.na(row))
-      sim <- similarityCal(row[-row.miss], xcomplete[, -row.miss], sim.method)
+      sim <- similarityCal(row[-row.miss], xcomplete[, -row.miss, drop=F], sim.method)
       sim.id <- order(sim, decreasing=T)[2:K+1]
       row[row.miss] <- t(xcomplete[sim.id, row.miss, drop=FALSE]) %*% ginv(t(xcomplete[sim.id, -row.miss, drop=FALSE])) %*%row[-row.miss, drop=FALSE]
       return(row)
